@@ -43,8 +43,13 @@ POPUP_MAX_WIDTH = 460       # 弹窗最大宽度
 SKIP_IF_MOSTLY_CJK = True   # 原文超过一半是中文就跳过
 
 BING_HOST = "cn.bing.com"
+
+# 弹窗底部「恢复使用」那行要显示的路径，换成你自己的程序位置即可。
+# 打包成 exe 的就填 exe 的路径，跑源码的就填 .py 的路径。
+APP_PATH = "C:\\Tools\\SelectTranslate.exe"
+
 NOTE = ("永久关闭：Win+R → 输入 shell:startup → 删除「划词翻译」快捷方式\n"
-        "恢复使用：双击 D:\\俞仁哲\\Python\\自写程序\\划词翻译.py")
+        "恢复使用：双击 " + APP_PATH)
 
 # ============================================================
 user32 = ctypes.WinDLL("user32", use_last_error=True)

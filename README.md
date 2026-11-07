@@ -58,7 +58,22 @@ pythonw 划词翻译.py
 
 钩子跑在 `WH_MOUSE_LL` 上，回调用 `LButtonDown/LButtonUp` 判断你是不是在拖选。判定成立就把坐标丢进队列，工作线程接手：先备份剪贴板，清空，模拟一次 `Ctrl+C`，轮询读回内容，再把原剪贴板还原，最后发给 Bing 翻译。界面那边只负责画窗口。
 
-几个数值都在源码顶部的「配置区」里，想调就改那一块，别的地方不用动。
+## 想改点什么
+
+源码顶部的「配置区」是给使用者自己填的地方，改完保存就生效：
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `APP_PATH` | `C:\Tools\SelectTranslate.exe` | 只是弹窗底部「恢复使用」显示的路径，换成你自己程序所在的位置；不换也不影响翻译 |
+| `MAX_CHARS` | 2000 | 超过多少字就不翻 |
+| `MIN_CHARS` | 1 | 至少几个字才翻 |
+| `DRAG_THRESHOLD` | 5 | 鼠标移动多少像素才算划选 |
+| `COOLDOWN_MS` | 350 | 两次取词的间隔，嫌太快就调大 |
+| `POPUP_TIMEOUT_MS` | 30000 | 弹窗多久自动消失 |
+| `POPUP_MAX_WIDTH` | 460 | 弹窗宽度上限 |
+| `SKIP_IF_MOSTLY_CJK` | True | 原文中文过半就跳过 |
+
+快捷键也在这附近，`Ctrl+Alt+P` 暂停、`Ctrl+Alt+Q` 退出，冲突的话改 `hook_thread()` 里 `RegisterHotKey` 的键值。
 
 ## 可能会遇到的问题
 
