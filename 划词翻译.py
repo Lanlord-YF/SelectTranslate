@@ -218,14 +218,18 @@ def _bing_token():
     return _tok
 
 
-def translate(text):
+SEP = " ||| "                # 混合文本批量翻译时的分隔符，Bing 会原样保留
+_dict_cache = {}
+
+
+def _bing_translate(text, fromlang):
     """调用 Bing 免费翻译接口，返回中文。"""
     global _conn
     for attempt in (0, 1):
         try:
             c = _bing_token()
             body = urllib.parse.urlencode({
-                "fromLang": "auto-detect", "text": text, "to": "zh-Hans",
+                "fromLang": fromlang, "text": text, "to": "zh-Hans",
                 "token": c["token"], "key": c["key"],
             }).encode("utf-8")
             path = f"/ttranslatev3?isVertical=1&&IG={c['ig']}&IID={c['iid']}.1"
@@ -235,8 +239,8 @@ def translate(text):
             })
             d = json.loads(raw)
             if isinstance(d, list):
-                return "".join(x["text"] for x in d[0]["translations"]).strip()
-            return d["translations"][0]["text"].strip()
+                d = d[0]
+            return "".join(x["text"] for x in d["translations"]).strip()
         except Exception:
             if attempt:
                 raise
@@ -244,10 +248,69 @@ def translate(text):
             _conn = None
 
 
+def _dict_def(word):
+    """查 Bing 词典，取词条释义；查不到返回空串。翻译接口对缩写常常原样返回，靠这个补。"""
+    key = word.lower()
+    if key in _dict_cache:
+        return _dict_cache[key]
+    out = ""
+    try:
+        html = _request("GET", "/dict/search?q=" + urllib.parse.quote(word) + "&mkt=zh-cn")
+        m = re.search(r'<meta name="description" content="必应词典为您提供[^"]{0,40}?的释义，'
+                      r'(.{0,200})', html)
+        if m:
+            d = re.sub(r"\s+", " ", m.group(1).split('" /><')[0]).strip(" ；;，。")
+            if "网络释义：" in d:
+                d = "网络释义：" + d.split("网络释义：", 1)[1].strip(" ；;，。")
+            out = d[:160]
+    except Exception:
+        out = ""
+    _dict_cache[key] = out
+    return out
+
+
+def _same(a, b):
+    return re.sub(r"\s+", "", a).casefold() == re.sub(r"\s+", "", b).casefold()
+
+
+def _translate_mixed(text):
+    """中英混合：只把英文片段送去翻译，中文原样保留，这样结果一定是中文。"""
+    parts = re.split(r"([\u4e00-\u9fff\u3400-\u4dbf]+)", text)
+    idx = [i for i, p in enumerate(parts) if p and LATIN.search(p)]
+    if not idx:
+        return text
+    out = _bing_translate(SEP.join(parts[i].strip() for i in idx), "en")
+    got = [x.strip() for x in out.split("|||")]
+    if len(got) != len(idx):
+        return _bing_translate(text, "auto-detect")     # 回填数量对不上就整段兜底
+    for i, g in zip(idx, got):
+        raw = parts[i]                                  # 保留原文两端的空格和标点
+        lead = raw[:len(raw) - len(raw.lstrip())]
+        trail = raw[len(raw.rstrip()):]
+        parts[i] = lead + g + trail
+    return "".join(parts)
+
+
+def translate(text):
+    """英译中。缩写被 Bing 原样返回时，改用词典释义。"""
+    if CJK.search(text) and LATIN.search(text):
+        return _translate_mixed(text)
+    out = _bing_translate(text, "en")
+    if _same(out, text):
+        word = text.strip(" \t\r\n，。！？；：、,.!?;:\"'()（）[]【】")
+        # 只给缩写查释义（WAF、TCP 这种），普通单词的词典释义往往是「舵手」之类，没意义
+        if 2 <= len(word) <= 12 and " " not in word and word.isupper():
+            d = _dict_def(word)
+            if d:
+                return word + "\n" + d
+    return out
+
+
 # ============================================================
 # 文本判断
 # ============================================================
 CJK = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf]")
+LATIN = re.compile(r"[A-Za-z]")
 
 
 def mostly_cjk(s):
